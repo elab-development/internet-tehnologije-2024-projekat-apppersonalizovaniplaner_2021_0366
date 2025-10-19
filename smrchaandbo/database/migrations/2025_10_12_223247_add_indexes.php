@@ -3,156 +3,322 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     */
+return new class extends Migration {
+    /** Check if a named index already exists on a table */
+    private function indexExists(string $table, string $indexName): bool
+    {
+        $sql = "SELECT 1
+
+
+                  FROM INFORMATION_SCHEMA.STATISTICS
+
+
+                 WHERE TABLE_SCHEMA = DATABASE()
+
+
+                   AND TABLE_NAME = ?
+
+
+                   AND INDEX_NAME = ?
+
+
+                 LIMIT 1";
+
+
+        return (bool) DB::selectOne($sql, [$table, $indexName]);
+    }
+
+    /** Create a unique index if it doesn't exist */
+
+    private function addUniqueIfMissing(string $table, string $indexName, array|string $columns): void
+    {
+        if (!$this->indexExists($table, $indexName)) {
+
+
+            Schema::table($table, function (Blueprint $t) use ($columns, $indexName) {
+
+
+                $t->unique((array) $columns, $indexName);
+
+
+            });
+
+
+        }
+
+    }
+    /** Create a (non-unique) index if it doesn't exist */
+    private function addIndexIfMissing(string $table, string $indexName, array|string $columns): void
+    {
+        if (!$this->indexExists($table, $indexName)) {
+
+
+            Schema::table($table, function (Blueprint $t) use ($columns, $indexName) {
+
+
+                $t->index((array) $columns, $indexName);
+
+
+            });
+
+
+        }
+    }
+
+    /** Drop an index if it exists */
+
+
+    private function dropIndexIfExists(string $table, string $indexName): void
+
+
+    {
+
+
+        if ($this->indexExists($table, $indexName)) {
+
+
+            Schema::table($table, function (Blueprint $t) use ($indexName) {
+
+
+                $t->dropIndex($indexName);
+
+
+            });
+
+
+        }
+
+
+    }
+
+
+
+
+
+    /** Drop a unique index if it exists */
+
+
+    private function dropUniqueIfExists(string $table, string $indexName): void
+
+
+    {
+
+
+        if ($this->indexExists($table, $indexName)) {
+
+
+            Schema::table($table, function (Blueprint $t) use ($indexName) {
+
+
+                $t->dropUnique($indexName);
+
+
+            });
+
+
+        }
+
+
+    }
+
     public function up(): void
     {
         // USERS
-        Schema::table('users', function (Blueprint $table) {
-            $table->unique('email', 'users_email_unique');
-            $table->index('role', 'users_role_idx');
-        });
+        $this->addUniqueIfMissing('users', 'users_email_unique', 'email');
 
-        // OPTION TABLES
-        Schema::table('size_options', function (Blueprint $table) {
-            $table->unique('code', 'size_options_code_unique');
-            $table->index('is_active', 'size_options_active_idx');
-        });
-        Schema::table('paper_options', function (Blueprint $table) {
-            $table->index('is_active', 'paper_options_active_idx');
-        });
-        Schema::table('binding_options', function (Blueprint $table) {
-            $table->index('is_active', 'binding_options_active_idx');
-        });
-        Schema::table('color_options', function (Blueprint $table) {
-            $table->index('is_active', 'color_options_active_idx');
-        });
-        Schema::table('cover_designs', function (Blueprint $table) {
-            $table->index('is_active', 'cover_designs_active_idx');
-        });
-        Schema::table('planner_templates', function (Blueprint $table) {
-            $table->unique('name', 'planner_templates_name_unique');
-            $table->index('is_active', 'planner_templates_active_idx');
-        });
-        Schema::table('planner_component_categories', function (Blueprint $table) {
-            $table->unique('slug', 'pcc_slug_unique');
-        });
+        $this->addIndexIfMissing('users', 'users_role_idx', 'role');
 
-        // PLANNERS
-        Schema::table('planners', function (Blueprint $table) {
-            $table->index('user_id', 'planners_user_idx');
-            $table->index('size_option_id', 'planners_size_idx');
-            $table->index('paper_option_id', 'planners_paper_idx');
-            $table->index('binding_option_id', 'planners_binding_idx');
-            $table->index('color_option_id', 'planners_color_idx');
-            $table->index('cover_design_id', 'planners_cover_idx');
-            $table->index('template_id', 'planners_template_idx');
-            $table->index('status', 'planners_status_idx');
-        });
+        // SIZE OPTIONS
+
+        $this->addUniqueIfMissing('size_options', 'size_options_code_unique', 'code');
+
+        $this->addIndexIfMissing('size_options', 'size_options_active_idx', 'is_active');
+
+
+        // PAPER/BINDING/COLOR/COVER
+
+
+        $this->addIndexIfMissing('paper_options', 'paper_options_active_idx', 'is_active');
+
+
+        $this->addIndexIfMissing('binding_options', 'binding_options_active_idx', 'is_active');
+
+
+        $this->addIndexIfMissing('color_options', 'color_options_active_idx', 'is_active');
+
+
+        $this->addIndexIfMissing('cover_designs', 'cover_designs_active_idx', 'is_active');
+
+        // PLANNER TEMPLATES
+        $this->addUniqueIfMissing('planner_templates', 'planner_templates_name_unique', 'name');
+        $this->addIndexIfMissing('planner_templates', 'planner_templates_active_idx', 'is_active');
+
+        // PLANNER COMPONENT CATEGORIES
+        $this->addUniqueIfMissing('planner_component_categories', 'pcc_slug_unique', 'slug');
+
+        //PlaNNERS
+         $this->addIndexIfMissing('planners', 'planners_user_idx', 'user_id');
+
+        $this->addIndexIfMissing('planners', 'planners_size_idx', 'size_option_id');
+
+
+        $this->addIndexIfMissing('planners', 'planners_paper_idx', 'paper_option_id');
+
+
+        $this->addIndexIfMissing('planners', 'planners_binding_idx', 'binding_option_id');
+
+
+        $this->addIndexIfMissing('planners', 'planners_color_idx', 'color_option_id');
+
+
+        $this->addIndexIfMissing('planners', 'planners_cover_idx', 'cover_design_id');
+
+
+        $this->addIndexIfMissing('planners', 'planners_template_idx', 'template_id');
+
+
+        $this->addIndexIfMissing('planners', 'planners_status_idx', 'status');
 
         // PLANNER COMPONENTS
-        Schema::table('planner_components', function (Blueprint $table) {
-            $table->unique('slug', 'planner_components_slug_unique');
-            $table->index('is_active', 'planner_components_active_idx');
-            $table->index('category_id', 'planner_components_category_idx');
-        });
+         $this->addUniqueIfMissing('planner_components', 'planner_components_slug_unique', 'slug');
+
+
+
+        $this->addIndexIfMissing('planner_components', 'planner_components_active_idx', 'is_active');
+
+
+        $this->addIndexIfMissing('planner_components', 'planner_components_category_idx', 'category_id');
+
+
 
         // PLANNER COMPONENT ITEMS
-        Schema::table('planner_component_items', function (Blueprint $table) {
-            $table->index('planner_id', 'pci_planner_idx');
-            $table->index('planner_component_id', 'pci_component_idx');
-            $table->index(['planner_id', 'sort_order'], 'pci_planner_sort_idx');
-        });
+       $this->addIndexIfMissing('planner_component_items', 'pci_planner_idx', 'planner_id');
+
+
+
+        $this->addIndexIfMissing('planner_component_items', 'pci_component_idx', 'planner_component_id');
+
+
+        $this->addIndexIfMissing('planner_component_items', 'pci_planner_sort_idx', ['planner_id', 'sort_order']);
 
         // ORDERS
-        Schema::table('orders', function (Blueprint $table) {
-            $table->unique('order_number', 'orders_order_number_unique');
-            $table->index('user_id', 'orders_user_idx');
-            $table->index('planner_id', 'orders_planner_idx');
-            $table->index('status', 'orders_status_idx');
-            $table->index('payment_status', 'orders_payment_status_idx');
-            $table->index('placed_at', 'orders_placed_at_idx');
-        });
+        $this->addUniqueIfMissing('orders', 'orders_order_number_unique', 'order_number');
+
+
+
+        $this->addIndexIfMissing('orders', 'orders_user_idx', 'user_id');
+
+
+        $this->addIndexIfMissing('orders', 'orders_planner_idx', 'planner_id');
+
+
+        $this->addIndexIfMissing('orders', 'orders_status_idx', 'status');
+
+
+        $this->addIndexIfMissing('orders', 'orders_payment_status_idx', 'payment_status');
+
+
+        $this->addIndexIfMissing('orders', 'orders_placed_at_idx', 'placed_at');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         // ORDERS
-        Schema::table('orders', function (Blueprint $table) {
-            $table->dropUnique('orders_order_number_unique');
-            $table->dropIndex('orders_user_idx');
-            $table->dropIndex('orders_planner_idx');
-            $table->dropIndex('orders_status_idx');
-            $table->dropIndex('orders_payment_status_idx');
-            $table->dropIndex('orders_placed_at_idx');
-        });
+       $this->dropUniqueIfExists('orders', 'orders_order_number_unique');
+
+
+
+        $this->dropIndexIfExists('orders', 'orders_user_idx');
+
+
+        $this->dropIndexIfExists('orders', 'orders_planner_idx');
+
+
+        $this->dropIndexIfExists('orders', 'orders_status_idx');
+
+
+        $this->dropIndexIfExists('orders', 'orders_payment_status_idx');
+
+
+        $this->dropIndexIfExists('orders', 'orders_placed_at_idx');
 
         // PLANNER COMPONENT ITEMS
-        Schema::table('planner_component_items', function (Blueprint $table) {
-            $table->dropIndex('pci_planner_idx');
-            $table->dropIndex('pci_component_idx');
-            $table->dropIndex('pci_planner_sort_idx');
-        });
+        $this->dropIndexIfExists('planner_component_items', 'pci_planner_idx');
+
+
+
+        $this->dropIndexIfExists('planner_component_items', 'pci_component_idx');
+
+
+        $this->dropIndexIfExists('planner_component_items', 'pci_planner_sort_idx');
 
         // PLANNER COMPONENTS
-        Schema::table('planner_components', function (Blueprint $table) {
-            $table->dropUnique('planner_components_slug_unique');
-            $table->dropIndex('planner_components_active_idx');
-            $table->dropIndex('planner_components_category_idx');
-        });
+        $this->dropUniqueIfExists('planner_components', 'planner_components_slug_unique');
+
+
+
+        $this->dropIndexIfExists('planner_components', 'planner_components_active_idx');
+
+
+        $this->dropIndexIfExists('planner_components', 'planner_components_category_idx');
 
         // PLANNERS
-        Schema::table('planners', function (Blueprint $table) {
-            $table->dropIndex('planners_user_idx');
-            $table->dropIndex('planners_size_idx');
-            $table->dropIndex('planners_paper_idx');
-            $table->dropIndex('planners_binding_idx');
-            $table->dropIndex('planners_color_idx');
-            $table->dropIndex('planners_cover_idx');
-            $table->dropIndex('planners_template_idx');
-            $table->dropIndex('planners_status_idx');
-        });
+        $this->dropIndexIfExists('planners', 'planners_user_idx');
+
+
+
+        $this->dropIndexIfExists('planners', 'planners_size_idx');
+
+
+        $this->dropIndexIfExists('planners', 'planners_paper_idx');
+
+
+        $this->dropIndexIfExists('planners', 'planners_binding_idx');
+
+
+        $this->dropIndexIfExists('planners', 'planners_color_idx');
+
+
+        $this->dropIndexIfExists('planners', 'planners_cover_idx');
+
+
+        $this->dropIndexIfExists('planners', 'planners_template_idx');
+
+
+        $this->dropIndexIfExists('planners', 'planners_status_idx');
 
         // PLANNER COMPONENT CATEGORIES
-        Schema::table('planner_component_categories', function (Blueprint $table) {
-            $table->dropUnique('pcc_slug_unique');
-        });
+               $this->dropUniqueIfExists('planner_component_categories', 'pcc_slug_unique');
 
         // PLANNER TEMPLATES
-        Schema::table('planner_templates', function (Blueprint $table) {
-            $table->dropUnique('planner_templates_name_unique');
-            $table->dropIndex('planner_templates_active_idx');
-        });
+       $this->dropUniqueIfExists('planner_templates', 'planner_templates_name_unique');
+
+        $this->dropIndexIfExists('planner_templates', 'planner_templates_active_idx');
 
         // OPTION TABLES
-        Schema::table('cover_designs', function (Blueprint $table) {
-            $table->dropIndex('cover_designs_active_idx');
-        });
-        Schema::table('color_options', function (Blueprint $table) {
-            $table->dropIndex('color_options_active_idx');
-        });
-        Schema::table('binding_options', function (Blueprint $table) {
-            $table->dropIndex('binding_options_active_idx');
-        });
-        Schema::table('paper_options', function (Blueprint $table) {
-            $table->dropIndex('paper_options_active_idx');
-        });
-        Schema::table('size_options', function (Blueprint $table) {
-            $table->dropUnique('size_options_code_unique');
-            $table->dropIndex('size_options_active_idx');
-        });
+       $this->dropIndexIfExists('cover_designs', 'cover_designs_active_idx');
+
+
+
+        $this->dropIndexIfExists('color_options', 'color_options_active_idx');
+
+
+        $this->dropIndexIfExists('binding_options', 'binding_options_active_idx');
+
+
+        $this->dropIndexIfExists('paper_options', 'paper_options_active_idx');
+
+
+        $this->dropUniqueIfExists('size_options', 'size_options_code_unique');
+
+
+        $this->dropIndexIfExists('size_options', 'size_options_active_idx');
 
         // USERS
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropUnique('users_email_unique');
-            $table->dropIndex('users_role_idx');
-        });
+         $this->dropUniqueIfExists('users', 'users_email_unique');
+
+        $this->dropIndexIfExists('users', 'users_role_idx');
     }
 };
