@@ -2,22 +2,55 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\User;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@smrchaandbo.com'],
+            [
+                'name' => 'Smrcha&Bo Admin',
+                'password' => 'admin123',
+                'role' => 'admin'
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $customers = [
+            [
+                'name' => 'Ana Marković',
+                'email' => 'ana@example.com'
+            ],
+            [
+                'name' => 'Marko Jovanović',
+                'email' => 'marko@example.com'
+            ],
+            [
+                'name' => 'Jelena Ilić',
+                'email' => 'jelena@example.com'
+            ],
+        ];
+        foreach ($customers as $c) {
+            User::firstOrCreate(
+                ['email' => $c['email']],
+                ['name' => $c['name'], 'password' => 'password', 'role' => 'customer']
+            );
+        }
+
+        $this->call([
+            SizeOptionSeeder::class,
+            PaperOptionSeeder::class,
+            BindingOptionSeeder::class,
+            ColorOptionSeeder::class,
+            CoverDesignSeeder::class,
+            PlannerTemplateSeeder::class,
+            PlannerComponentCategorySeeder::class,
+            PlannerComponentSeeder::class,
+            PlannerSeeder::class,
+            PlannerComponentItemSeeder::class,
+            OrderSeeder::class,
         ]);
     }
 }
