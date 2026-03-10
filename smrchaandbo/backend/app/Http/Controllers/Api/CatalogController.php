@@ -39,42 +39,60 @@ class CatalogController extends Controller
     public function sizesIndex(Request $request)
     {
         $q = SizeOption::query();
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+         $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
         return SizeOptionResource::collection($q->orderBy('label')->get());
     }
 
     public function papersIndex(Request $request)
     {
         $q = PaperOption::query();
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+         $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
         return PaperOptionResource::collection($q->orderBy('gsm')->get());
     }
 
     public function bindingsIndex(Request $request)
     {
         $q = BindingOption::query();
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+        $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
         return BindingOptionResource::collection($q->orderBy('label')->get());
     }
 
     public function colorsIndex(Request $request)
     {
         $q = ColorOption::query();
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+        $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
         return ColorOptionResource::collection($q->orderBy('name')->get());
     }
 
     public function coversIndex(Request $request)
     {
         $q = CoverDesign::query();
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+        $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
         return CoverDesignResource::collection($q->orderBy('name')->get());
     }
 
     public function templatesIndex(Request $request)
     {
         $q = PlannerTemplate::query();
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+        $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
         return PlannerTemplateResource::collection($q->orderBy('name')->get());
     }
 
@@ -88,10 +106,13 @@ class CatalogController extends Controller
     {
         $q = PlannerComponent::query()->with('category');
 
-        if ($request->filled('category_id')) $q->where('category_id', $request->integer('category_id'));
-        if ($request->boolean('active_only', true)) $q->where('is_active', true);
+         $activeOnly = filter_var($request->query('active_only', '1'), FILTER_VALIDATE_BOOLEAN);
+        if ($activeOnly) {
+            $q->where('is_active', true);
+        }
 
-        if ($search = $request->string('search')->toString()) {
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
             $q->where(function ($qq) use ($search) {
                 $qq->where('title', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
@@ -99,6 +120,9 @@ class CatalogController extends Controller
             });
         }
 
+        if ($request->filled('category_id')) {
+            $q->where('category_id', (int) $request->query('category_id'));
+        }
         return PlannerComponentResource::collection($q->orderBy('title')->get());
     }
 
