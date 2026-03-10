@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\CatalogController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\PlannerController;
+use App\Http\Controllers\Api\OrderController;
 
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -95,4 +96,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Recalculate totals (returns computed totals; doesn’t change db state except snapshots on items)
     Route::post('/planners/{id}/recalculate', [PlannerController::class, 'recalculate']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    // List / read
+    Route::get('/orders',  [OrderController::class, 'index']);
+    Route::get('/orders/{id}', [OrderController::class, 'show']);
+
+    // Create (customer)
+    Route::post('/orders', [OrderController::class, 'store']);
+
+    // Update shipping (owner before paid/canceled; admin always)
+    Route::put('/orders/{id}', [OrderController::class, 'update']);
+
+    // Customer cancel (while pending)
+    Route::post('/orders/{id}/cancel',  [OrderController::class, 'cancel']);
+
+    // Admin operational transitions
+    Route::middleware('admin')->group(function () {
+        Route::post('/orders/{id}/mark-paid',  [OrderController::class, 'markPaid']);
+        Route::post('/orders/{id}/mark-refunded', [OrderController::class, 'markRefunded']);
+        Route::post('/orders/{id}/in-production',  [OrderController::class, 'markInProduction']);
+        Route::post('/orders/{id}/mark-shipped', [OrderController::class, 'markShipped']);
+        Route::post('/orders/{id}/mark-delivered', [OrderController::class, 'markDelivered']);
+    });
 });

@@ -48,14 +48,12 @@ class Order extends Model
     ];
 
     protected $casts = [
-        'subtotal' => 'decimal:2',
-        'tax' => 'decimal:2',
-        'shipping_fee' => 'decimal:2',
-        'discount_total' => 'decimal:2',
-        'total' => 'decimal:2',
-        'status' => OrderStatus::class,
-        'payment_status' => PaymentStatus::class,
-        'placed_at' => 'datetime',
+        'subtotal'       => 'float',
+        'tax'            => 'float',
+        'shipping_fee'   => 'float',
+        'discount_total' => 'float',
+        'total'          => 'float',
+        'placed_at'      => 'datetime',
     ];
 
     public function user(): BelongsTo
