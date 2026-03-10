@@ -7,8 +7,42 @@ export const api = axios.create({
   xsrfHeaderName: 'X-XSRF-TOKEN',
 });
 
+// Helpers to trigger the loading overlay via window events
+function emitStart() {
+  window.dispatchEvent(new CustomEvent('app:loading-start'));
+}
+function emitStop() {
+  window.dispatchEvent(new CustomEvent('app:loading-stop'));
+}
+
+/**
+ * Request interceptor:
+ * - overlay by default
+ * - skip per-request by passing { noSpinner: true } in config
+ */
+api.interceptors.request.use((config) => {
+  if (!config.noSpinner) emitStart();
+  return config;
+});
+
+/**
+ * Response & error interceptors:
+ */
+api.interceptors.response.use(
+  (response) => {
+    if (!response.config.noSpinner) emitStop();
+    return response;
+  },
+  (error) => {
+    if (!error.config || !error.config.noSpinner) emitStop();
+    return Promise.reject(error);
+  }
+);
+
+// API calls
+
 export async function getCsrf() {
-  await api.get('/sanctum/csrf-cookie');
+  await api.get('/sanctum/csrf-cookie', { noSpinner: true });
 }
 
 export async function registerUser(payload) {
