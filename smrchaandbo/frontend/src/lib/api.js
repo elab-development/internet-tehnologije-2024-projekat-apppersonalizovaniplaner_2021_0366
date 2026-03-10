@@ -5,6 +5,7 @@ export const api = axios.create({
   withCredentials: true,
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
+  headers: { Accept: 'application/json' },
 });
 
 // Helpers to trigger the loading overlay via window events
