@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\CatalogController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\PlannerController;
 
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -68,3 +69,30 @@ Route::middleware(['auth:sanctum', 'admin'])
         Route::put('/components/{id}', [CatalogController::class, 'componentsUpdate']);
         Route::delete('/components/{id}', [CatalogController::class, 'componentsDestroy']);
     });
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    // List planners:
+    // - Admin: sees all (optionally filter by user_id)
+    // - Customer: sees only their planners
+    Route::get('/planners', [PlannerController::class, 'index']);
+
+    // Create (customers only)
+    Route::post('/planners', [PlannerController::class, 'store']);
+
+    // Read one (owner or admin)
+    Route::get('/planners/{id}', [PlannerController::class, 'show']);
+
+    // Update / Delete (owner or admin; basic lock rule inside controller)
+    Route::put('/planners/{id}', [PlannerController::class, 'update']);
+    Route::delete('/planners/{id}', [PlannerController::class, 'destroy']);
+
+    // Items (owner or admin)
+    Route::get('/planners/{id}/items', [PlannerController::class, 'itemsIndex']);
+    Route::post('/planners/{id}/items', [PlannerController::class, 'itemsStore']);
+    Route::put('/planners/{id}/items/{itemId}', [PlannerController::class, 'itemsUpdate']);
+    Route::delete('/planners/{id}/items/{itemId}', [PlannerController::class, 'itemsDestroy']);
+
+    // Recalculate totals (returns computed totals; doesn’t change db state except snapshots on items)
+    Route::post('/planners/{id}/recalculate', [PlannerController::class, 'recalculate']);
+});
