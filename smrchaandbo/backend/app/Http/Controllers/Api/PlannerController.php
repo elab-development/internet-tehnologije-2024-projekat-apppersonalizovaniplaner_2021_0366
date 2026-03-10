@@ -4,20 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB;
 use App\Models\{
-    User,
     Planner,
     PlannerComponentItem,
-    PlannerTemplate,
-    SizeOption,
-    PaperOption,
-    BindingOption,
-    ColorOption,
-    CoverDesign,
     PlannerComponent,
-    Order
+    Order,
+    UserRole
 };
 use App\Http\Resources\{
     PlannerResource,
@@ -29,14 +21,18 @@ class PlannerController extends Controller
     /** ===================== Helpers ===================== */
     protected function isAdmin(Request $request): bool
     {
-        return ($request->user()?->role === 'admin');
+        // $request->user()->role je enum UserRole
+        return $request->user()?->role === UserRole::ADMIN;
     }
 
     protected function assertOwnerOrAdmin(Request $request, Planner $planner): void
     {
         $user = $request->user();
-        if (!$user) abort(401);
-        if ($user->role !== 'admin' && $planner->user_id !== $user->id) {
+         if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        if ($user->role !== UserRole::ADMIN && $planner->user_id !== $user->id) {
             abort(403, 'Forbidden');
         }
     }
@@ -81,7 +77,7 @@ class PlannerController extends Controller
     {
         $user = $request->user();
         $q = Planner::query()
-            ->with(['user:id,name,email', 'template', 'size', 'paper', 'binding', 'color', 'cover'])
+             ->with(['user:id,name,email,role', 'template', 'size', 'paper', 'binding', 'color', 'cover'])
             ->withCount('items');
 
         if ($this->isAdmin($request)) {
@@ -110,7 +106,7 @@ class PlannerController extends Controller
     public function show(Request $request, int $id)
     {
         $planner = Planner::with([
-            'user:id,name,email',
+            'user:id,name,email,role',
             'template',
             'size',
             'paper',
@@ -130,12 +126,13 @@ class PlannerController extends Controller
 
     /** ===================== WRITE ===================== */
 
-    // POST /api/planners  (customers only)
+     // POST /api/planners  (customers only — ali proveravamo i ovde eksplicitno)
     public function store(Request $request)
     {
         $user = $request->user();
-        if (!$user || $user->role !== 'customer') {
-            abort(403, 'Only customers can create planners.');
+         // DODATNA PROVERA: nemoj oslanjati se samo na middleware
+        if ($user->role !== UserRole::CUSTOMER) {
+            return response()->json(['message' => 'Only customers can create planners.'], 403);
         }
 
         $data = $request->validate([
@@ -174,7 +171,7 @@ class PlannerController extends Controller
         $this->assertOwnerOrAdmin($request, $planner);
 
         if ($this->isLocked($planner)) {
-            abort(422, 'Planner is locked (already used by an order).');
+             return response()->json(['message' => 'Planner is locked (already used by an order).'], 422);
         }
 
         $data = $request->validate([
@@ -203,7 +200,7 @@ class PlannerController extends Controller
         $this->assertOwnerOrAdmin($request, $planner);
 
         if ($this->isLocked($planner)) {
-            abort(422, 'Planner is locked (already used by an order).');
+             return response()->json(['message' => 'Planner is locked (already used by an order).'], 422);
         }
 
         $planner->delete();
@@ -230,7 +227,7 @@ class PlannerController extends Controller
         $this->assertOwnerOrAdmin($request, $planner);
 
         if ($this->isLocked($planner)) {
-            abort(422, 'Planner is locked (already used by an order).');
+             return response()->json(['message' => 'Planner is locked (already used by an order).'], 422);
         }
 
         $data = $request->validate([
@@ -267,10 +264,12 @@ class PlannerController extends Controller
         $this->assertOwnerOrAdmin($request, $planner);
 
         if ($this->isLocked($planner)) {
-            abort(422, 'Planner is locked (already used by an order).');
+             return response()->json(['message' => 'Planner is locked (already used by an order).'], 422);
         }
 
-        $item = PlannerComponentItem::where('planner_id', $planner->id)->findOrFail($itemId);
+         $item = PlannerComponentItem::where('planner_id', $planner->id)
+            ->where('id', $itemId)
+            ->firstOrFail();
 
         $data = $request->validate([
             'quantity'     => ['sometimes', 'integer', 'min:1'],
@@ -297,10 +296,13 @@ class PlannerController extends Controller
         $this->assertOwnerOrAdmin($request, $planner);
 
         if ($this->isLocked($planner)) {
-            abort(422, 'Planner is locked (already used by an order).');
+             return response()->json(['message' => 'Planner is locked (already used by an order).'], 422);
         }
 
-        $item = PlannerComponentItem::where('planner_id', $planner->id)->findOrFail($itemId);
+        $item = PlannerComponentItem::where('planner_id', $planner->id)
+            ->where('id', $itemId)
+            ->firstOrFail();
+
         $item->delete();
 
         return response()->json(['deleted' => true]);
@@ -309,7 +311,8 @@ class PlannerController extends Controller
     // POST /api/planners/{id}/recalculate
     public function recalculate(Request $request, int $id)
     {
-        $planner = Planner::with(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component'])->findOrFail($id);
+        $planner = Planner::with(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component'])
+            ->findOrFail($id);
         $this->assertOwnerOrAdmin($request, $planner);
 
         $totals = $this->calculateTotals($planner);
