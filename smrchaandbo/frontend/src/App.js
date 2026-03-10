@@ -5,6 +5,7 @@ import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import Account from './pages/Account.jsx';
+import CreatePlanner from './pages/CreatePlanner.jsx';
 import RedirectAuth from './routes/RedirectAuth.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
 import PrivateRoute from './routes/PrivateRoute.jsx';
@@ -36,6 +37,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <Account />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/planners/new'
+          element={
+            <PrivateRoute>
+              <CreatePlanner />
             </PrivateRoute>
           }
         />
