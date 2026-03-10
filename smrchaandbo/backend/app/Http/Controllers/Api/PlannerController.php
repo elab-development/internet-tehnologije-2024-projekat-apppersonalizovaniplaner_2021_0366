@@ -21,17 +21,13 @@ class PlannerController extends Controller
     /** ===================== Helpers ===================== */
     protected function isAdmin(Request $request): bool
     {
-        // $request->user()->role je enum UserRole
         return $request->user()?->role === UserRole::ADMIN;
     }
 
     protected function assertOwnerOrAdmin(Request $request, Planner $planner): void
     {
         $user = $request->user();
-         if (!$user) {
-            abort(401, 'Unauthenticated.');
-        }
-
+          if (!$user) abort(401, 'Unauthenticated.');
         if ($user->role !== UserRole::ADMIN && $planner->user_id !== $user->id) {
             abort(403, 'Forbidden');
         }
@@ -39,11 +35,9 @@ class PlannerController extends Controller
 
     protected function isLocked(Planner $planner): bool
     {
-        // Lock if already used by an order
         return Order::where('planner_id', $planner->id)->exists();
     }
-
-    /** Recalculate totals (no DB writes here—items snapshots updated when items change) */
+     /** Sirov proračun totals-a (bez upisa u DB) */
     protected function calculateTotals(Planner $planner): array
     {
         $templateBase = (float) optional($planner->template)->base_price;
@@ -53,26 +47,62 @@ class PlannerController extends Controller
         $colorDelta   = (float) optional($planner->color)->price_delta;
         $coverDelta   = (float) optional($planner->cover)->price_delta;
 
-        $itemsTotal = $planner->items->sum(function ($it) {
-            // fallbacks if snapshots missing
+         $componentsTotal = $planner->items->sum(function ($it) {
             $unit = $it->unit_price_snapshot ?? (float) optional($it->component)->base_price;
             $qty  = $it->quantity ?? 1;
             return (float) $unit * (int) $qty;
         });
 
-        $subtotal = $templateBase + $sizeDelta + $paperDelta + $bindingDelta + $colorDelta + $coverDelta + $itemsTotal;
+        $optionsTotal = $sizeDelta + $paperDelta + $bindingDelta + $colorDelta + $coverDelta;
+        $final = $templateBase + $optionsTotal + $componentsTotal;
+
+        // pages estimate: sum (item.pages ?? component.default_pages) * quantity
+        $pagesEstimate = $planner->items->sum(function ($it) {
+            $pages = $it->pages ?? optional($it->component)->default_pages ?? 0;
+            $qty   = $it->quantity ?? 1;
+            return (int) $pages * (int) $qty;
+        });
 
         return [
-            'template_base' => $templateBase,
-            'options_delta' => $sizeDelta + $paperDelta + $bindingDelta + $colorDelta + $coverDelta,
-            'items_total'   => (float) $itemsTotal,
-            'subtotal'      => (float) $subtotal,
+              'base_price'       => (float) $templateBase,
+            'options_total'    => (float) $optionsTotal,
+            'components_total' => (float) $componentsTotal,
+            'final_price'      => (float) $final,
+            'pages_estimate'   => (int) $pagesEstimate,
         ];
+    }
+    /** Izračunaj i upiši totals polja + eventualno pages_estimate kad nije zadat */
+    protected function recalcAndPersist(Planner $planner, ?int $overridePages = null): Planner
+    {
+        $planner->load(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component']);
+
+        $totals = $this->calculateTotals($planner);
+
+        $update = [
+            'base_price'       => $totals['base_price'],
+            'options_total'    => $totals['options_total'],
+            'components_total' => $totals['components_total'],
+            'final_price'      => $totals['final_price'],
+        ];
+
+        // ako nije eksplicitno prosleđen pages_estimate, koristimo izračunat
+        $update['pages_estimate'] = $overridePages ?? $totals['pages_estimate'];
+
+        $planner->fill($update)->save();
+
+        // attach computed_totals za response
+        $planner->computed_totals = [
+            'template_base' => (float) $totals['base_price'],
+            'options_delta' => (float) $totals['options_total'],
+            'items_total'   => (float) $totals['components_total'],
+            'subtotal'      => (float) $totals['final_price'],
+        ];
+
+        return $planner;
     }
 
     /** ===================== READ ===================== */
 
-    // GET /api/planners
     public function index(Request $request)
     {
         $user = $request->user();
@@ -81,7 +111,7 @@ class PlannerController extends Controller
             ->withCount('items');
 
         if ($this->isAdmin($request)) {
-            // Optional filters for admin
+            
             if ($request->filled('user_id')) {
                 $q->where('user_id', (int) $request->query('user_id'));
             }
@@ -93,16 +123,23 @@ class PlannerController extends Controller
         }
 
         $planners = $q->orderByDesc('id')->get();
-        // attach computed totals for convenience
+        
         $planners->load('items.component');
+
+          // priloži computed_totals za UI (nije obavezno, ali zgodno)
         $planners->each(function ($p) {
-            $p->computed_totals = $this->calculateTotals($p);
+             $totals = $this->calculateTotals($p);
+            $p->computed_totals = [
+                'template_base' => (float) $totals['base_price'],
+                'options_delta' => (float) $totals['options_total'],
+                'items_total'   => (float) $totals['components_total'],
+                'subtotal'      => (float) $totals['final_price'],
+            ];
         });
 
         return PlannerResource::collection($planners);
     }
 
-    // GET /api/planners/{id}
     public function show(Request $request, int $id)
     {
         $planner = Planner::with([
@@ -119,49 +156,57 @@ class PlannerController extends Controller
 
         $this->assertOwnerOrAdmin($request, $planner);
 
-        $planner->computed_totals = $this->calculateTotals($planner);
+         // osveži computed_totals (kolone već postoje u bazi)
+        $totals = $this->calculateTotals($planner);
+        $planner->computed_totals = [
+            'template_base' => (float) $totals['base_price'],
+            'options_delta' => (float) $totals['options_total'],
+            'items_total'   => (float) $totals['components_total'],
+            'subtotal'      => (float) $totals['final_price'],
+        ];
 
         return new PlannerResource($planner);
     }
 
     /** ===================== WRITE ===================== */
 
-     // POST /api/planners  (customers only — ali proveravamo i ovde eksplicitno)
+       // POST /api/planners
     public function store(Request $request)
     {
         $user = $request->user();
-         // DODATNA PROVERA: nemoj oslanjati se samo na middleware
         if ($user->role !== UserRole::CUSTOMER) {
             return response()->json(['message' => 'Only customers can create planners.'], 403);
         }
 
         $data = $request->validate([
-            'title'         => ['nullable', 'string', 'max:150'],
-            'template_id'   => ['required', 'exists:planner_templates,id'],
-            'size_id'       => ['required', 'exists:size_options,id'],
-            'paper_id'      => ['required', 'exists:paper_options,id'],
-            'binding_id'    => ['required', 'exists:binding_options,id'],
-            'color_id'      => ['nullable', 'exists:color_options,id'],
-            'cover_id'      => ['nullable', 'exists:cover_designs,id'],
-            'notes'         => ['nullable', 'string', 'max:1000'],
+            'title'              => ['nullable', 'string', 'max:150'],
+            'custom_title_text'  => ['nullable', 'string', 'max:150'],
+            'template_id'        => ['required', 'exists:planner_templates,id'],
+            'size_option_id'     => ['required', 'exists:size_options,id'],
+            'paper_option_id'    => ['required', 'exists:paper_options,id'],
+            'binding_option_id'  => ['required', 'exists:binding_options,id'],
+            'color_option_id'    => ['nullable', 'exists:color_options,id'],
+            'cover_design_id'    => ['nullable', 'exists:cover_designs,id'],
+            'pages_estimate'     => ['nullable', 'integer', 'min:1'],
         ]);
 
         $planner = Planner::create([
-            'user_id'     => $user->id,
-            'title'       => $data['title'] ?? null,
-            'template_id' => $data['template_id'],
-            'size_id'     => $data['size_id'],
-            'paper_id'    => $data['paper_id'],
-            'binding_id'  => $data['binding_id'],
-            'color_id'    => $data['color_id'] ?? null,
-            'cover_id'    => $data['cover_id'] ?? null,
-            'notes'       => $data['notes'] ?? null,
+            'user_id'           => $user->id,
+            'title'             => $data['title'] ?? null,
+            'custom_title_text' => $data['custom_title_text'] ?? null,
+            'template_id'       => $data['template_id'],
+            'size_option_id'    => $data['size_option_id'],
+            'paper_option_id'   => $data['paper_option_id'],
+            'binding_option_id' => $data['binding_option_id'],
+            'color_option_id'   => $data['color_option_id'] ?? null,
+            'cover_design_id'   => $data['cover_design_id'] ?? null,
         ]);
 
-        $planner->load(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component']);
-        $planner->computed_totals = $this->calculateTotals($planner);
+         // izračunaj i upiši totals (poštuj ručno prosleđen pages_estimate ako ga ima)
+        $overridePages = $data['pages_estimate'] ?? null;
+        $planner = $this->recalcAndPersist($planner, $overridePages);
 
-        return new PlannerResource($planner);
+         return new PlannerResource($planner->load(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component']));
     }
 
     // PUT /api/planners/{id}
@@ -175,22 +220,24 @@ class PlannerController extends Controller
         }
 
         $data = $request->validate([
-            'title'         => ['sometimes', 'nullable', 'string', 'max:150'],
-            'template_id'   => ['sometimes', 'exists:planner_templates,id'],
-            'size_id'       => ['sometimes', 'exists:size_options,id'],
-            'paper_id'      => ['sometimes', 'exists:paper_options,id'],
-            'binding_id'    => ['sometimes', 'exists:binding_options,id'],
-            'color_id'      => ['sometimes', 'nullable', 'exists:color_options,id'],
-            'cover_id'      => ['sometimes', 'nullable', 'exists:cover_designs,id'],
-            'notes'         => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'title'              => ['sometimes', 'nullable', 'string', 'max:150'],
+            'custom_title_text'  => ['sometimes', 'nullable', 'string', 'max:150'],
+            'template_id'        => ['sometimes', 'exists:planner_templates,id'],
+            'size_option_id'     => ['sometimes', 'exists:size_options,id'],
+            'paper_option_id'    => ['sometimes', 'exists:paper_options,id'],
+            'binding_option_id'  => ['sometimes', 'exists:binding_options,id'],
+            'color_option_id'    => ['sometimes', 'nullable', 'exists:color_options,id'],
+            'cover_design_id'    => ['sometimes', 'nullable', 'exists:cover_designs,id'],
+            'pages_estimate'     => ['sometimes', 'nullable', 'integer', 'min:1'],
         ]);
 
         $planner->update($data);
 
-        $planner->load(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component']);
-        $planner->computed_totals = $this->calculateTotals($planner);
+         // ponovo izračunaj i upiši totals; ako je pages_estimate poslat, koristi njega
+        $overridePages = array_key_exists('pages_estimate', $data) ? $data['pages_estimate'] : null;
+        $planner = $this->recalcAndPersist($planner, $overridePages);
 
-        return new PlannerResource($planner);
+        return new PlannerResource($planner->load(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component']));
     }
 
     // DELETE /api/planners/{id}
@@ -210,7 +257,6 @@ class PlannerController extends Controller
 
     /** ===================== ITEMS ===================== */
 
-    // GET /api/planners/{id}/items
     public function itemsIndex(Request $request, int $id)
     {
         $planner = Planner::findOrFail($id);
@@ -220,7 +266,6 @@ class PlannerController extends Controller
         return PlannerComponentItemResource::collection($items);
     }
 
-    // POST /api/planners/{id}/items
     public function itemsStore(Request $request, int $id)
     {
         $planner = Planner::findOrFail($id);
@@ -235,7 +280,7 @@ class PlannerController extends Controller
             'quantity'     => ['nullable', 'integer', 'min:1'],
             'pages'        => ['nullable', 'integer', 'min:1', 'max:1000'],
             'sort_order'   => ['nullable', 'integer', 'min:0'],
-            'config_json'  => ['nullable', 'array'], // accepts JSON object
+             'config_json'  => ['nullable', 'array'],
         ]);
 
         $component = PlannerComponent::findOrFail($data['component_id']);
@@ -248,16 +293,17 @@ class PlannerController extends Controller
         $item->sort_order           = $data['sort_order'] ?? 0;
         $item->config_json          = $data['config_json'] ?? null;
 
-        // price snapshots
         $item->unit_price_snapshot  = (float) $component->base_price;
         $item->line_total_snapshot  = (float) $item->unit_price_snapshot * (int) $item->quantity;
 
         $item->save();
 
+         // nakon izmene item-a, recalculiši i upiši totals
+        $this->recalcAndPersist($planner->fresh());
+
         return new PlannerComponentItemResource($item->load('component.category'));
     }
 
-    // PUT /api/planners/{id}/items/{itemId}
     public function itemsUpdate(Request $request, int $id, int $itemId)
     {
         $planner = Planner::findOrFail($id);
@@ -280,16 +326,18 @@ class PlannerController extends Controller
 
         $item->update($data);
 
-        // refresh price snapshot if quantity changed
+          // osveži snapshot
         $unit = $item->unit_price_snapshot ?: (float) optional($item->component)->base_price;
         $qty  = $item->quantity ?? 1;
         $item->line_total_snapshot = (float) $unit * (int) $qty;
         $item->save();
 
+          // nakon izmene item-a, recalculiši i upiši totals
+        $this->recalcAndPersist($planner->fresh());
+
         return new PlannerComponentItemResource($item->load('component.category'));
     }
 
-    // DELETE /api/planners/{id}/items/{itemId}
     public function itemsDestroy(Request $request, int $id, int $itemId)
     {
         $planner = Planner::findOrFail($id);
@@ -305,18 +353,29 @@ class PlannerController extends Controller
 
         $item->delete();
 
+         // nakon izmene item-a, recalculiši i upiši totals
+        $this->recalcAndPersist($planner->fresh());
+
         return response()->json(['deleted' => true]);
     }
 
-    // POST /api/planners/{id}/recalculate
     public function recalculate(Request $request, int $id)
     {
         $planner = Planner::with(['template', 'size', 'paper', 'binding', 'color', 'cover', 'items.component'])
             ->findOrFail($id);
         $this->assertOwnerOrAdmin($request, $planner);
 
-        $totals = $this->calculateTotals($planner);
+        // recalculiši i upiši totals; vrati i computed_totals
+        $planner = $this->recalcAndPersist($planner);
 
-        return response()->json(['totals' => $totals]);
+        return response()->json([
+            'totals' => [
+                'base_price'       => (float) $planner->base_price,
+                'options_total'    => (float) $planner->options_total,
+                'components_total' => (float) $planner->components_total,
+                'final_price'      => (float) $planner->final_price,
+                'pages_estimate'   => (int) $planner->pages_estimate,
+            ],
+        ]);
     }
 }
