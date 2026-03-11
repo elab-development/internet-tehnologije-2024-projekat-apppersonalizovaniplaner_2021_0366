@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AdminTabs from '../components/admin/AdminTabs';
 import CatalogManager from '../components/admin/catalog/CatalogManager';
 import AdminPlanners from '../components/admin/planners/AdminPlanners';
+import AdminUsers from '../components/admin/users/AdminUsers';
 
 function Placeholder({ title }) {
   return <div className='py-8 text-slate-500'>{title} — coming soon.</div>;
@@ -18,29 +19,23 @@ const TABS = [
 ];
 
 export default function AdminDashboard() {
-  const [active, setActive] = useState('planners');
+  const [active, setActive] = useState('catalog');
   
 
   return (
-    <section className='space-y-6'>
+    <><section className='space-y-6'>
       <h1 className='text-3xl font-semibold tracking-tight'>
         <span className='text-fuchsia-700'>Admin Dashboard</span>
       </h1>
-      
-       <AdminTabs tabs={TABS} active={active} onChange={setActive} />
-
-    
-         <div className='space-y-6'>
-        {active === 'planners' && <AdminPlanners />}
+      <AdminTabs tabs={TABS} active={active} onChange={setActive} />
+      <div>
         {active === 'catalog' && <CatalogManager />}
 
-        {active === 'overview' && <Placeholder title='Overview' />}
-        {active === 'users' && <Placeholder title='Users' />}
 
         {active === 'orders' && <Placeholder title='Orders' />}
         {active === 'reports' && <Placeholder title='Reports' />}
         {active === 'settings' && <Placeholder title='Settings' />}
-      </div>
+      </div></>
     </section>
   );
 }
