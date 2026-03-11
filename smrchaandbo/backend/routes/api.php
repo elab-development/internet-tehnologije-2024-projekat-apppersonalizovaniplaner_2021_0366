@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\Api\AdminStatsController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\PlannerController;
@@ -154,4 +155,6 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('/users', [UserAdminController::class, 'index'])->name('users.index');
+    Route::get('/admin/stats', [AdminStatsController::class, 'overview'])->name('admin.stats.overview');
+
 });
