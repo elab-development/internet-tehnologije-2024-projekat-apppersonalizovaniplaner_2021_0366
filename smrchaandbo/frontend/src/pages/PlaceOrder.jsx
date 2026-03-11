@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getPlanner } from '../lib/plannerApi';
 import { createOrder } from '../lib/ordersApi';
+import { loadCountries } from '../lib/countriesApi';
 
 function useQuery() {
   const { search } = useLocation();
@@ -20,7 +21,9 @@ export default function PlaceOrder() {
 
   const [planner, setPlanner] = useState(null);
   const [loading, setLoading] = useState(true);
-
+// countries
+  const [countries, setCountries] = useState([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
   // shipping form
   const [shipping, setShipping] = useState({
     shipping_name: '',
@@ -31,7 +34,7 @@ export default function PlaceOrder() {
   });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-
+ // load planner
   useEffect(() => {
     (async () => {
       try {
@@ -50,10 +53,31 @@ export default function PlaceOrder() {
       }
     })();
   }, [plannerId]);
-
+// load countries
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await loadCountries();
+        setCountries(list);
+        // default country (ako nije setovano)
+        if (!shipping.shipping_country) {
+          const preferred = [
+            'Serbia',
+            'Germany',
+            'United States',
+            'United Kingdom',
+          ];
+          const pick = preferred.find((c) => list.includes(c)) || list[0] || '';
+          setShipping((s) => ({ ...s, shipping_country: pick }));
+        }
+      } finally {
+        setCountriesLoading(false);
+      }
+    })();
+  }, []); // once
   const price = useMemo(() => {
     if (!planner) return null;
-    // server computed_totals.subtotal ~ template+options+components
+  
     const subtotal = parseFloat(planner?.computed_totals?.subtotal ?? 0);
     const tax = +(subtotal * 0.2).toFixed(2);
     const shippingFee = subtotal > 50 ? 0 : 4.9;
@@ -112,7 +136,7 @@ export default function PlaceOrder() {
         </div>
 
         <div className='grid sm:grid-cols-2 gap-4'>
-          <Field
+           <Field
             label='Name'
             value={shipping.shipping_name}
             onChange={(v) => setShipping((s) => ({ ...s, shipping_name: v }))}
@@ -134,9 +158,11 @@ export default function PlaceOrder() {
             value={shipping.shipping_zip}
             onChange={(v) => setShipping((s) => ({ ...s, shipping_zip: v }))}
           />
-          <Field
+          <SelectField
             label='Country'
             value={shipping.shipping_country}
+             options={countries}
+            loading={countriesLoading}
             onChange={(v) =>
               setShipping((s) => ({ ...s, shipping_country: v }))
             }
@@ -193,6 +219,31 @@ function Field({ label, value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         className='w-full bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-500'
       />
+    </div>
+  );
+}
+function SelectField({ label, value, onChange, options = [], loading }) {
+  return (
+    <div>
+      <label className='block text-sm text-slate-700 mb-1'>{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={loading || options.length === 0}
+        className='w-full bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 disabled:opacity-60'
+      >
+        {loading ? (
+          <option value=''>Loading…</option>
+        ) : options.length === 0 ? (
+          <option value=''>No countries</option>
+        ) : (
+          options.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))
+        )}
+      </select>
     </div>
   );
 }
