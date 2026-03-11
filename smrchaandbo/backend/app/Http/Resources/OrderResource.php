@@ -37,8 +37,7 @@ class OrderResource extends JsonResource
                 'name'  => $this->user->name,
                 'email' => $this->user->email,
             ]),
-
-            // Prošireni planner samo kada je učitan (u show)
+ // Prošireni planner samo kada je učitan (u show)
             'planner' => $this->whenLoaded('planner', function () {
                 $p = $this->planner;
 
@@ -106,6 +105,7 @@ class OrderResource extends JsonResource
                     }) : [],
                 ];
             }),
+           
         ];
     }
 }

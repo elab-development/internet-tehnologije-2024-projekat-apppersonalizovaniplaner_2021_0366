@@ -111,8 +111,22 @@ class OrderController extends Controller
     // GET /api/orders/{id}
     public function show(Request $request, int $id)
     {
-        $order = Order::with(['user:id,name,email', 'planner'])->findOrFail($id);
+          $order = Order::with([
+            'user:id,name,email',
+            // Učitaj sve relacije planera za detaljan prikaz u modalu
+            'planner',
+            'planner.template',
+            'planner.size',
+            'planner.paper',
+            'planner.binding',
+            'planner.color',
+            'planner.cover',
+            'planner.items',
+            'planner.items.component',
+            'planner.items.component.category',
+        ])->findOrFail($id);
         $this->assertOwnerOrAdmin($request, $order);
+        
         return new OrderResource($order);
     }
 
