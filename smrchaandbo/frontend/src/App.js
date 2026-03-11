@@ -6,6 +6,7 @@ import Register from './pages/Register.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import Account from './pages/Account.jsx';
 import CreatePlanner from './pages/CreatePlanner.jsx';
+import PlaceOrder from './pages/PlaceOrder.jsx';
 import RedirectAuth from './routes/RedirectAuth.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
 import PrivateRoute from './routes/PrivateRoute.jsx';
@@ -48,7 +49,14 @@ export default function App() {
             </PrivateRoute>
           }
         />
-
+<Route
+          path='/orders/new'
+          element={
+            <PrivateRoute>
+              <PlaceOrder />
+            </PrivateRoute>
+          }
+        />
         <Route
           path='/admin'
           element={
