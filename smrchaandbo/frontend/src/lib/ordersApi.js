@@ -1,6 +1,7 @@
+// src/lib/ordersApi.js
 import { api, getCsrf } from './api';
 
-// Read (auth)
+// ===== Read (auth) =====
 export const getOrders = (p = {}) =>
   api.get('/api/orders', {
     params: p,
@@ -15,7 +16,27 @@ export const getOrder = (id) =>
 
 
 
-// Admin transitions
+// ===== Create (customer) =====
+export const createOrder = async (payload) => {
+  // payload: { planner_id, shipping_name, shipping_address, shipping_city, shipping_zip, shipping_country }
+  await getCsrf();
+  return api.post('/api/orders', payload, { withCredentials: true });
+};
+
+// ===== Update shipping (owner while pending / admin) =====
+export const updateOrder = async (id, payload) => {
+  // payload: any subset of shipping_* fields
+  await getCsrf();
+  return api.put(`/api/orders/${id}`, payload, { withCredentials: true });
+};
+
+// ===== Cancel (customer while pending / admin) =====
+export const cancelOrder = async (id) => {
+  await getCsrf();
+  return api.post(`/api/orders/${id}/cancel`, {}, { withCredentials: true });
+};
+
+// ===== Admin transitions =====
 export const markPaid = async (id) => {
   await getCsrf();
   return api.post(`/api/orders/${id}/mark-paid`, {}, { withCredentials: true });

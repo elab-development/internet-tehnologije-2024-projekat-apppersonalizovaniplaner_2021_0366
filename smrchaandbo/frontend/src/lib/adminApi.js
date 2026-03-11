@@ -8,3 +8,5 @@ const readAuthCfg = (params = {}) => ({
 
 // Admin: users list
 export const getUsers = (p = {}) => api.get('/api/users', readAuthCfg(p));
+export const getAdminStats = (p = {}) =>
+  api.get('/api/admin/stats', readAuthCfg(p));

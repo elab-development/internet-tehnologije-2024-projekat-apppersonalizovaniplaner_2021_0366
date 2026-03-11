@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import AdminTabs from '../components/admin/AdminTabs';
 import CatalogManager from '../components/admin/catalog/CatalogManager';
+import AdminOverview from '../components/admin/overview/AdminOverview';
 import AdminPlanners from '../components/admin/planners/AdminPlanners';
 import AdminUsers from '../components/admin/users/AdminUsers';
 import AdminOrders from '../components/admin/orders/AdminOrders';
-
-function Placeholder({ title }) {
-  return <div className='py-8 text-slate-500'>{title} — coming soon.</div>;
-}
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
@@ -18,8 +15,8 @@ const TABS = [
 ];
 
 export default function AdminDashboard() {
-  const [active, setActive] = useState('catalog');
-  
+
+   const [active, setActive] = useState('overview');
 
   return (
     <section className='space-y-6'>
@@ -28,7 +25,9 @@ export default function AdminDashboard() {
       </h1>
       <AdminTabs tabs={TABS} active={active} onChange={setActive} />
       <div>
+        {active === 'overview' && <AdminOverview />}
         {active === 'catalog' && <CatalogManager />}
+        {active === 'planners' && <AdminPlanners />}
         {active === 'orders' && <AdminOrders />}
        
       </div>
