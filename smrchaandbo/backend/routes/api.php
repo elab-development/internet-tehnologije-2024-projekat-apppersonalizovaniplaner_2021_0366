@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\PlannerController;
 use App\Http\Controllers\Api\OrderController;
-
+use App\Http\Controllers\Api\UserAdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -150,4 +150,8 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::post('/orders/{id}/in-production',  [OrderController::class, 'markInProduction'])->name('orders.inProduction');
     Route::post('/orders/{id}/mark-shipped',   [OrderController::class, 'markShipped'])->name('orders.markShipped');
     Route::post('/orders/{id}/mark-delivered', [OrderController::class, 'markDelivered'])->name('orders.markDelivered');
+});
+
+Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::get('/users', [UserAdminController::class, 'index'])->name('users.index');
 });
